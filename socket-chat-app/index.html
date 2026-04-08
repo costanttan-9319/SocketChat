@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Socket.IO chat</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+      /* Styling for the top status bar */
+      #status-bar { 
+        background: #f8f9fa; 
+        padding: 12px; 
+        border-bottom: 1px solid #dee2e6; 
+        position: sticky; 
+        top: 0; 
+        display: flex; 
+        gap: 20px;
+        min-height: 20px;
+      }
+      .user-pill { display: flex; align-items: center; gap: 8px; font-family: sans-serif; }
+      .dot { height: 10px; width: 10px; background-color: #28a745; border-radius: 50%; }
+      .typing { font-size: 0.85em; color: #6c757d; font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <div id="status-bar">Waiting for connection...</div>
+    
+    <ul id="messages"></ul>
+    
+    <form id="form" action="">
+      <input id="input" autocomplete="off" placeholder="Type a message..." /><button>Send</button>
+    </form>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      var socket = io();
+      var nickname = prompt("What's your nickname?") || "Anonymous";
+      
+      // Tell server we joined AFTER connection is solid
+      socket.on('connect', function() {
+        socket.emit('user joined', nickname);
+      });
+
+      var statusBar = document.getElementById('status-bar');
+      var messages = document.getElementById('messages');
+      var input = document.getElementById('input');
+      var form = document.getElementById('form');
+
+      // Helper to put messages on the screen
+      function appendMessage(name, text) {
+        var item = document.createElement('li');
+        item.textContent = name + ": " + text;
+        messages.appendChild(item);
+        window.scrollTo(0, document.body.scrollHeight);
+      }
+
+      // Track if the server thinks we are typing
+      var isCurrentlyTyping = false;
+
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (input.value) {
+          // Put it on our screen instantly
+          appendMessage(nickname, input.value);
+          
+          // Send to everyone else
+          socket.emit('chat message', { nickname: nickname, msg: input.value });
+          
+          // We sent the message, so we are definitely not typing anymore
+          isCurrentlyTyping = false;
+          socket.emit('typing', false);
+          
+          // Clear the chat bar
+          input.value = '';
+        }
+      });
+
+      // Listen for other people's messages
+      socket.on('chat message', function(data) {
+        appendMessage(data.nickname, data.msg);
+      });
+
+      // Content-based typing detector! (Checks if box has text)
+      input.addEventListener('input', function() {
+        var hasText = input.value.length > 0;
+
+        // If there is text, and the server doesn't know we are typing yet
+        if (hasText && !isCurrentlyTyping) {
+          isCurrentlyTyping = true;
+          socket.emit('typing', true);
+        } 
+        // If they backspaced everything, and the server still thinks they are typing
+        else if (!hasText && isCurrentlyTyping) {
+          isCurrentlyTyping = false;
+          socket.emit('typing', false);
+        }
+      });
+
+      // Redraw the Top Bar whenever someone joins, leaves, or types
+      socket.on('status update', function(registry) {
+        statusBar.innerHTML = ''; 
+        
+        for (let user in registry) {
+          var userDiv = document.createElement('div');
+          userDiv.className = 'user-pill';
+          var typingSpan = registry[user].isTyping ? '<span class="typing"> is typing...</span>' : '';
+          userDiv.innerHTML = `<span class="dot"></span><strong>${user}</strong>${typingSpan}`;
+          statusBar.appendChild(userDiv);
+        }
+      });
+    </script>
+  </body>
+</html>
