@@ -23,8 +23,6 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v4
         with:
-          # This tells GitHub to look inside your subfolder
-          context: ./socket-chat-app
-          file: ./socket-chat-app/Dockerfile
+          context: .
           push: true
           tags: ${{ secrets.DOCKER_HUB_USERNAME }}/socketchat-app:latest
